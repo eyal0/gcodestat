@@ -1,11 +1,7 @@
-CURL   := E:\Dev\eclipse-workspace\curl
-
 CC     := gcc
-ARCH   := ${CURL}\lib\libcurl.a
-CFLAGS := -DCURL_STATICLIB -Wall -Werror -I${CURL}\include   
-LFLAGS := -L${CURL}\lib
-SLIBS  := -static -static-libgcc -lgcc -lws2_32 -lwldap32 #-lpthread -static-libstdc++ -lstdc++
-LIBS   := -lm -lcurl
+CFLAGS := -Wall -Werror
+SLIBS  := -static -static-libgcc -lgcc
+LIBS   := -lm
 
 
 SRCS   := gcodestat.c calcmove.c readconfig.c readgcode.c

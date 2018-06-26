@@ -24,7 +24,6 @@
 #include <math.h>
 #include <malloc.h>
 #include <sys/time.h>
-#include <curl/curl.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -206,12 +205,6 @@ void print_timeleft_f(FILE* f, char * sformat, long int sec, int pct){
 }
 
 
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-   size_t realsize = size * nmemb;
-   return realsize;
-}
-
-
 /*
  * main
  */
@@ -232,13 +225,6 @@ int main(int argc, char** argv) {
    double heatup_time = 0.0;
    char *apikey = NULL;
    char *apiurl = NULL;
-   CURL *curl = NULL;
-   CURLcode res;
-   curl_mime *form = NULL;
-   curl_mimepart *field = NULL;
-   struct curl_slist *headerlist = NULL;
-   void *chunk = NULL;
-   int alert = 0;
 
    static struct option long_options[] = {
       {"help", no_argument, NULL, 'h'},
@@ -297,7 +283,6 @@ int main(int argc, char** argv) {
 			return (-1);
 			break;
       case 'w':
-         alert = 1;
          break;
       case 'm':
          m117format = strdup(optarg);
@@ -610,42 +595,6 @@ int main(int argc, char** argv) {
       //print_timeleft_f(output_file, m117format, (long int) floor(total_seconds - seconds), (int) floor(next_pct * 100));
       fprintf(output_file, "\n;\n");
       fclose(output_file);
-   }
-
-   curl_global_init(CURL_GLOBAL_ALL);
-   curl = curl_easy_init();
-   if (curl && apikey && apiurl) {
-      char apiheader[128]; // should be 44 but maybe in future api key will be bigger
-
-      chunk = malloc(1);
-      form = curl_mime_init(curl);
-      field = curl_mime_addpart(form);
-      curl_mime_name(field, "file");
-      curl_mime_filedata(field, gcodeout ? gcodeout : gcodefile);
-      field = curl_mime_addpart(form);
-      curl_mime_name(field, "filename");
-      curl_mime_data(field, gcodeout ? gcodeout : gcodefile, CURL_ZERO_TERMINATED);
-      snprintf(apiheader, 128, "X-Api-Key: %s", apikey);
-      headerlist = curl_slist_append(headerlist, "Expect:");
-      headerlist = curl_slist_append(headerlist, apiheader);
-      curl_easy_setopt(curl, CURLOPT_URL, apiurl);
-      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
-      curl_easy_setopt(curl, CURLOPT_MIMEPOST, form);
-      curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
-      curl_easy_setopt(curl, CURLOPT_USERAGENT, "gcodestat/0.x");
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, chunk);
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-
-      if (!quiet) fprintf(stderr, "Uploading file to %s\n", apiurl);
-      res = curl_easy_perform(curl);
-      if (res != CURLE_OK)
-         fprintf(stderr, "Failed uploading file to server. Error: %s\n", curl_easy_strerror(res));
-      if (!quiet) fprintf(stderr, "Uploading DONE!\n");
-
-      free(chunk);
-      curl_easy_cleanup(curl);
-      curl_mime_free(form);
-      curl_slist_free_all(headerlist);
    }
 
 #ifdef _WIN32
