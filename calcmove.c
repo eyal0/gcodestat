@@ -124,55 +124,21 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
     double speed_y = f * ya / distance;
     double speed_z = f * za / distance;
 
-    // Start with exit speed limited to full stop jerk.
-    double speed_reduction_factor = 1;
-    for (unsigned int i = 0; i < 3; i++) {
-      double jerk, maxj;
-      //TODO: jerk for each axis
-      switch (i) {
-        case 0: jerk = abs(speed_x), maxj = print_settings->jdev; break;
-        case 1: jerk = abs(speed_y), maxj = print_settings->jdev; break;
-        case 2: jerk = abs(speed_z), maxj = print_settings->jdev; break;
-      }
-      if (jerk > maxj) {
-        speed_reduction_factor = _MIN_(speed_reduction_factor, maxj/jerk);
-      }
-    }
-    double safe_speed = f * speed_reduction_factor;
-
     double v_factor = 1;
-    double vmax_junction = _MIN_(f, oldf);
-    const double smaller_speed_factor = vmax_junction / oldf;
     for (unsigned int axis = 0; axis < 3; axis++) {
       float v_exit, v_entry;
       switch (axis) {
-        case 0: v_exit = oldspeed_x * smaller_speed_factor; v_entry = speed_x; break;
-        case 1: v_exit = oldspeed_y * smaller_speed_factor; v_entry = speed_y; break;
-        case 2: v_exit = oldspeed_z * smaller_speed_factor; v_entry = speed_z; break;
+        case 0: v_exit = oldspeed_x; v_entry = speed_x; break;
+        case 1: v_exit = oldspeed_y; v_entry = speed_y; break;
+        case 2: v_exit = oldspeed_z; v_entry = speed_z; break;
       }
-      v_exit *= v_factor;
-      v_entry *= v_factor;
-      // Calculate jerk depending on whether the axis is coasting in the same direction or reversing.
-      const float jerk = (v_exit > v_entry)
-                         ? //                                  coasting             axis reversal
-                         ( (v_entry > 0 || v_exit < 0) ? (v_exit - v_entry) : _MAX_(v_exit, -v_entry) )
-                         : // v_exit <= v_entry                coasting             axis reversal
-                         ( (v_entry < 0 || v_exit > 0) ? (v_entry - v_exit) : _MAX_(-v_exit, v_entry) );
-
+      double jerk = abs(v_exit - v_entry);
       if (jerk > print_settings->jdev) {
-        v_factor *= print_settings->jdev / jerk;
+        v_factor = _MIN_(v_factor, print_settings->jdev/jerk);
       }
     }
-    vmax_junction *= v_factor;
-    // Now the transition velocity is known, which maximizes the shared exit / entry velocity while
-    // respecting the jerk factors, it may be possible, that applying separate safe exit / entry velocities will achieve faster prints.
-    const float vmax_junction_threshold = vmax_junction * 0.99f;
-    if (oldspeed > vmax_junction_threshold && safe_speed > vmax_junction_threshold) {
-      vmax_junction = safe_speed;
-    }
-    speed = vmax_junction;
-    printf("oldspeed %f, wantedspeed %f, junction %f\n", oldspeed, f, speed);
-} else {
+    speed = f * v_factor;
+  } else {
 	  //SMOOTHIEWARE - JUNCTION DEVIATION & ACCELERATION
 
 		costheta = (xa * oldxa + ya * oldya + za + oldza) / (sqrt(xa * xa + ya * ya + za * za) * sqrt(oldxa * oldxa + oldya * oldya + oldza * oldza));
