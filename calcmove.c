@@ -119,9 +119,10 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
     double oldspeed_y = oldspeed * oldya / olddistance;
     double oldspeed_z = oldspeed * oldza / olddistance;
 
-    double speed_x = speed * xa / distance;
-    double speed_y = speed * ya / distance;
-    double speed_z = speed * za / distance;
+    // The speed that we want.
+    double speed_x = f * xa / distance;
+    double speed_y = f * ya / distance;
+    double speed_z = f * za / distance;
 
     // Start with exit speed limited to full stop jerk.
     double speed_reduction_factor = 1;
@@ -129,15 +130,15 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
       double jerk, maxj;
       //TODO: jerk for each axis
       switch (i) {
-        case 0: jerk = abs(speed_x), maxj = print_settings->jerk; break;
-        case 1: jerk = abs(speed_y), maxj = print_settings->jerk; break;
-        case 2: jerk = abs(speed_z), maxj = print_settings->jerk; break;
+        case 0: jerk = abs(speed_x), maxj = print_settings->jdev; break;
+        case 1: jerk = abs(speed_y), maxj = print_settings->jdev; break;
+        case 2: jerk = abs(speed_z), maxj = print_settings->jdev; break;
       }
       if (jerk > maxj) {
-        speed_reduction_factor = _MIN_(speed_reduction_factor, jerk/maxj);
+        speed_reduction_factor = _MIN_(speed_reduction_factor, maxj/jerk);
       }
     }
-    double safe_speed = speed * speed_reduction_factor;
+    double safe_speed = f * speed_reduction_factor;
 
     double v_factor = 1;
     double vmax_junction = _MIN_(f, oldf);
@@ -158,8 +159,8 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
                          : // v_exit <= v_entry                coasting             axis reversal
                          ( (v_entry < 0 || v_exit > 0) ? (v_entry - v_exit) : _MAX_(-v_exit, v_entry) );
 
-      if (jerk > print_settings->jerk) {
-        v_factor *= print_settings->jerk / jerk;
+      if (jerk > print_settings->jdev) {
+        v_factor *= print_settings->jdev / jerk;
       }
     }
     vmax_junction *= v_factor;
@@ -170,6 +171,7 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
       vmax_junction = safe_speed;
     }
     speed = vmax_junction;
+    printf("oldspeed %f, wantedspeed %f, junction %f\n", oldspeed, f, speed);
 } else {
 	  //SMOOTHIEWARE - JUNCTION DEVIATION & ACCELERATION
 

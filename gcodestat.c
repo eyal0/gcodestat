@@ -349,8 +349,9 @@ int main(int argc, char** argv) {
 			break;
 		case 'j':
 			if (optarg) {
-                                print_settings.jerk = true;
-                                if (print_settings.jerk <= 0) {
+                          print_settings.jerk = true;
+                          print_settings.jdev = atof(optarg);
+                                if (print_settings.jdev < 0) {
 					fprintf(stderr, "Invalid jerk value: %s\n",
 							optarg);
 					_CLEANUP_
