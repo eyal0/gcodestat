@@ -349,9 +349,13 @@ int main(int argc, char** argv) {
 			break;
 		case 'j':
 			if (optarg) {
-				//TODO: implement jerk thingy
-				fprintf(stderr, "TODO: JERK IS NOT YET SUPORTED, SORRY\n");
-				return (-999);
+                                print_settings.jerk = true;
+                                if (print_settings.jerk <= 0) {
+					fprintf(stderr, "Invalid jerk value: %s\n",
+							optarg);
+					_CLEANUP_
+					return (-1);
+				}
 			} else {
 				print_usage();
 				_CLEANUP_

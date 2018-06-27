@@ -106,15 +106,71 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
   if (!print_settings->mm) distance = distance * 25.4; //if units are in inch then convert to mm
 
 
+  // This move's change in x/y/z, aka delta x/y/z
   xa = x - oldx;
   ya = y - oldy;
   za = z - oldz;
 
   if (print_settings->jerk) {
-	  //MARLIN - JERK & ACCELERATION
+    // Decompose oldspeed into components x/y/z
+    // oldspeed's direction was the normalized vector of oldxa,oldyz,oldza
+    double olddistance = sqrt(oldxa*oldxa + oldya*oldya + oldza*oldza);
+    double oldspeed_x = oldspeed * oldxa / olddistance;
+    double oldspeed_y = oldspeed * oldya / olddistance;
+    double oldspeed_z = oldspeed * oldza / olddistance;
 
-	  ret = 0; //TODO: implement
-  } else {
+    double speed_x = speed * xa / distance;
+    double speed_y = speed * ya / distance;
+    double speed_z = speed * za / distance;
+
+    // Start with exit speed limited to full stop jerk.
+    double speed_reduction_factor = 1;
+    for (unsigned int i = 0; i < 3; i++) {
+      double jerk, maxj;
+      //TODO: jerk for each axis
+      switch (i) {
+        case 0: jerk = abs(speed_x), maxj = print_settings->jerk; break;
+        case 1: jerk = abs(speed_y), maxj = print_settings->jerk; break;
+        case 2: jerk = abs(speed_z), maxj = print_settings->jerk; break;
+      }
+      if (jerk > maxj) {
+        speed_reduction_factor = _MIN_(speed_reduction_factor, jerk/maxj);
+      }
+    }
+    double safe_speed = speed * speed_reduction_factor;
+
+    double v_factor = 1;
+    double vmax_junction = _MIN_(f, oldf);
+    const double smaller_speed_factor = vmax_junction / oldf;
+    for (unsigned int axis = 0; axis < 3; axis++) {
+      float v_exit, v_entry;
+      switch (axis) {
+        case 0: v_exit = oldspeed_x * smaller_speed_factor; v_entry = speed_x; break;
+        case 1: v_exit = oldspeed_y * smaller_speed_factor; v_entry = speed_y; break;
+        case 2: v_exit = oldspeed_z * smaller_speed_factor; v_entry = speed_z; break;
+      }
+      v_exit *= v_factor;
+      v_entry *= v_factor;
+      // Calculate jerk depending on whether the axis is coasting in the same direction or reversing.
+      const float jerk = (v_exit > v_entry)
+                         ? //                                  coasting             axis reversal
+                         ( (v_entry > 0 || v_exit < 0) ? (v_exit - v_entry) : _MAX_(v_exit, -v_entry) )
+                         : // v_exit <= v_entry                coasting             axis reversal
+                         ( (v_entry < 0 || v_exit > 0) ? (v_entry - v_exit) : _MAX_(-v_exit, v_entry) );
+
+      if (jerk > print_settings->jerk) {
+        v_factor *= print_settings->jerk / jerk;
+      }
+    }
+    vmax_junction *= v_factor;
+    // Now the transition velocity is known, which maximizes the shared exit / entry velocity while
+    // respecting the jerk factors, it may be possible, that applying separate safe exit / entry velocities will achieve faster prints.
+    const float vmax_junction_threshold = vmax_junction * 0.99f;
+    if (oldspeed > vmax_junction_threshold && safe_speed > vmax_junction_threshold) {
+      vmax_junction = safe_speed;
+    }
+    speed = vmax_junction;
+} else {
 	  //SMOOTHIEWARE - JUNCTION DEVIATION & ACCELERATION
 
 		costheta = (xa * oldxa + ya * oldya + za + oldza) / (sqrt(xa * xa + ya * ya + za * za) * sqrt(oldxa * oldxa + oldya * oldya + oldza * oldza));
@@ -127,25 +183,25 @@ double calcmove(char * buffer,  print_settings_t * print_settings){
 		}
 		speed = _MIN_(speed, print_settings->x_maxspeed);
 		speed = _MIN_(speed, print_settings->y_maxspeed);
+  }
+       Ta = (f - oldspeed) / print_settings->accel; // time to reach speed from start speed (end speed of previous move)
+       Td = (f - speed) / print_settings->accel; // time to decelerate to "end speed" of current movement
+       Sa = (f + oldspeed) * Ta / 2.0;    // length moved during acceleration
+       Sd = (f + speed) * Td / 2.0;       // length moved during deceleration
+       if ((Sa + Sd) < distance) {
+         Ts = (distance - (Sa + Sd)) / f; // time spent during constant speed
+       } else {
+         Ts = 0; // no time for constant speed, move was too short for accel + decel + constant speed
+         //split accel and decel in half, no clue how each firmware handles this but this seems like a proper thing to do
+         //Sa = Sd == distance/2
+         //T = 2*S / (V0+V1)
+         Ta = distance / (f + oldspeed);
+         Td = distance / (f + speed);
+       }
+       
+       ret = Ta + Ts + Td;
+       oldspeed = speed;
 
-		Ta = (f - oldspeed) / print_settings->accel; // time to reach speed from start speed (end speed of previous move)
-		Td = (f - speed) / print_settings->accel; // time to decelerate to "end speed" of current movement
-		Sa = (f + oldspeed) * Ta / 2.0;    // length moved during acceleration
-		Sd = (f + speed) * Td / 2.0;       // length moved during deceleration
-		if ((Sa + Sd) < distance) {
-			Ts = (distance - (Sa + Sd)) / f; // time spent during constant speed
-		} else {
-			Ts = 0; // no time for constant speed, move was too short for accel + decel + constant speed
-			        //split accel and decel in half, no clue how each firmware handles this but this seems like a proper thing to do
-			        //Sa = Sd == distance/2
-			        //T = 2*S / (V0+V1)
-			Ta = distance / (f + oldspeed);
-			Td = distance / (f + speed);
-		}
-
-		ret = Ta + Ts + Td;
-		oldspeed = speed;
-	}
 
 	oldx = x;
 	oldy = y;

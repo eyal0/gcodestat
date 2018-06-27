@@ -13,6 +13,10 @@
   #define _MIN_(a,b) (((a)<(b))?(a):(b))
 #endif
 
+#ifndef _MAX_
+  #define _MAX_(a,b) (((a)>(b))?(a):(b))
+#endif
+
 
 double calcmove(char *,  print_settings_t *);
 
